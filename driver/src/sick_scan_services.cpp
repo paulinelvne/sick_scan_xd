@@ -85,6 +85,8 @@ sick_scan::SickScanServices::SickScanServices(rosNodePtr nh, sick_scan::SickScan
     if(nh)
     {
       m_client_authorization_pw = "F4724744";
+      if (lidar_param->getUseSafetyPasWD()) // TIM_7xxS - 1 layer Safety Scanner
+        m_client_authorization_pw = "6FD62C05";
       rosDeclareParam(nh, "client_authorization_pw", m_client_authorization_pw);
       rosGetParam(nh, "client_authorization_pw", m_client_authorization_pw);
 

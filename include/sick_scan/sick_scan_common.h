@@ -332,6 +332,8 @@ namespace sick_scan
       return parser_ ? parser_->getCurrentParamPtr() : 0;
     }
 
+    std::string cmdSetAccessMode3(void);
+
     /// Converts reply from sendSOPASCommand to string
     /**
      * \param [in] reply reply from sendSOPASCommand

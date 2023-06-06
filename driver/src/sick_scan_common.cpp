@@ -652,6 +652,18 @@ namespace sick_scan
   }
 
   /*!
+  \brief Returns "sMN SetAccessMode 3 F4724744" resp. "\x02sMN SetAccessMode 3 6FD62C05\x03\0" for safety scanner
+  \return error code
+   */
+  std::string SickScanCommon::cmdSetAccessMode3(void)
+  {
+    std::string set_access_mode_3 = sopasCmdVec[CMD_SET_ACCESS_MODE_3]; // "sMN SetAccessMode 3 F4724744"
+    if (parser_->getCurrentParamPtr()->getUseSafetyPasWD()) // TIM_7xxS - 1 layer Safety Scanner
+      set_access_mode_3 = sopasCmdVec[CMD_SET_ACCESS_MODE_3_SAFETY_SCANNER]; // "\x02sMN SetAccessMode 3 6FD62C05\x03\0"
+    return set_access_mode_3;
+  }
+
+  /*!
   \brief Stops sending scan data
   \return error code
    */
@@ -667,13 +679,13 @@ namespace sick_scan
       sopas_stop_scanner_cmd.push_back("\x02sEN LIDoutputstate 0\x03"); // TiM781S: deactivate LIDoutputstate messages, send "sEN LIDoutputstate 0"
       sopas_stop_scanner_cmd.push_back("\x02sEN LIDinputstate 0\x03"); // TiM781S: deactivate LIDinputstate messages, send "sEN LIDinputstate 0"
     }
-    sopas_stop_scanner_cmd.push_back("\x02sMN SetAccessMode 3 F4724744\x03\0");
+    sopas_stop_scanner_cmd.push_back(cmdSetAccessMode3()); // "sMN SetAccessMode 3 F4724744"
     sopas_stop_scanner_cmd.push_back("\x02sMN LMCstopmeas\x03\0");
     // sopas_stop_scanner_cmd.push_back("\x02sMN Run\x03\0");
     if (parser_->getCurrentParamPtr()->getScannerName().compare(SICK_SCANNER_NAV_350_NAME) == 0)
     {
       sopas_stop_scanner_cmd.clear();
-      sopas_stop_scanner_cmd.push_back(sopasCmdVec[CMD_SET_ACCESS_MODE_3]); // "sMN SetAccessMode 3 F4724744"
+      sopas_stop_scanner_cmd.push_back(cmdSetAccessMode3()); // "sMN SetAccessMode 3 F4724744"
       sopas_stop_scanner_cmd.push_back(sopasCmdVec[CMD_SET_NAV_OPERATIONAL_MODE_1]); // "sMN mNEVAChangeState 1", 1 = standby
       sopas_stop_scanner_cmd.push_back(sopasCmdVec[CMD_SET_NAV_OPERATIONAL_MODE_0]); // "sMN mNEVAChangeState 0", 0 = power down
     }
@@ -790,7 +802,7 @@ namespace sick_scan
 
 
     // changed from "03" to "3"
-    int result = convertSendSOPASCommand("\x02sMN SetAccessMode 3 F4724744\x03\0", &access_reply);
+    int result = convertSendSOPASCommand(cmdSetAccessMode3(), &access_reply); // "sMN SetAccessMode 3 F4724744"
     if (result != 0)
     {
       ROS_ERROR("SOPAS - Error setting access mode");
@@ -1183,7 +1195,7 @@ namespace sick_scan
       {
         ROS_WARN_STREAM("checkColaDialect: lidar response in configured Cola-dialect Cola-" << (!useBinaryCmd ? "B" : "A") << ", changing Cola configuration and restart!");
         std::vector<std::string> sopas_change_cola_commands = {
-          sopasCmdVec[CMD_SET_ACCESS_MODE_3],
+          cmdSetAccessMode3(), // sopasCmdVec[CMD_SET_ACCESS_MODE_3],
           sopasCmdVec[(useBinaryCmd ? CMD_SET_TO_COLA_B_PROTOCOL : CMD_SET_TO_COLA_A_PROTOCOL)]
         };
         for(int n = 0; n < sopas_change_cola_commands.size(); n++)
@@ -1215,7 +1227,8 @@ namespace sick_scan
       this->convertAscii2BinaryCmd(sopasCmdVec[CMD_RUN].c_str(), &reqBinary);
       result &= (0 == sendSopasAndCheckAnswer(reqBinary, &sopasReplyBinVec[CMD_RUN]));
       reqBinary.clear();
-      this->convertAscii2BinaryCmd(sopasCmdVec[CMD_SET_ACCESS_MODE_3].c_str(), &reqBinary);
+      std::string sUserLvlCmd = cmdSetAccessMode3(); // "sMN SetAccessMode 3 F4724744"
+      this->convertAscii2BinaryCmd(sUserLvlCmd.c_str(), &reqBinary);
       result &= (0 == sendSopasAndCheckAnswer(reqBinary, &sopasReplyBinVec[CMD_SET_ACCESS_MODE_3]));
       reqBinary.clear();
     }
@@ -1223,9 +1236,9 @@ namespace sick_scan
     {
       std::vector<unsigned char> resetReply;
       std::string runCmd = sopasCmdVec[CMD_RUN];
-      std::string UserLvlCmd = sopasCmdVec[CMD_SET_ACCESS_MODE_3];
+      std::string sUserLvlCmd = cmdSetAccessMode3(); // "sMN SetAccessMode 3 F4724744"
       result &= (0 == sendSopasAndCheckAnswer(runCmd, &resetReply));
-      result &= (0 == sendSopasAndCheckAnswer(UserLvlCmd, &resetReply));
+      result &= (0 == sendSopasAndCheckAnswer(sUserLvlCmd, &resetReply));
     }
     return result;
   }
@@ -1923,7 +1936,9 @@ namespace sick_scan
     {
       ipNewIPAddr = sNewIPAddr;
       sopasCmdChain.clear();
-      sopasCmdChain.push_back(CMD_SET_ACCESS_MODE_3);
+      sopasCmdChain.push_back(CMD_SET_ACCESS_MODE_3); // "sMN SetAccessMode 3 F4724744"
+      if (this->parser_->getCurrentParamPtr()->getUseSafetyPasWD()) // TIM_7xxS - 1 layer Safety Scanner
+        sopasCmdChain.push_back(CMD_SET_ACCESS_MODE_3_SAFETY_SCANNER); // "\x02sMN SetAccessMode 3 6FD62C05\x03\0"
     }
     std::string sNTPIpAdress = "";
     std::string NTPIpAdress;
@@ -5859,7 +5874,8 @@ namespace sick_scan
       this->convertAscii2BinaryCmd(sopasCmdVec[CMD_RUN].c_str(), &reqBinary);
       result &= (0 == sendSopasAndCheckAnswer(reqBinary, &sopasReplyBinVec[CMD_RUN]));
       reqBinary.clear();
-      this->convertAscii2BinaryCmd(sopasCmdVec[CMD_SET_ACCESS_MODE_3].c_str(), &reqBinary);
+      std::string UserLvlCmd = cmdSetAccessMode3();
+      this->convertAscii2BinaryCmd(UserLvlCmd.c_str(), &reqBinary);
       result &= (0 == sendSopasAndCheckAnswer(reqBinary, &sopasReplyBinVec[CMD_SET_ACCESS_MODE_3]));
       reqBinary.clear();
       this->convertAscii2BinaryCmd(sopasCmdVec[CMD_REBOOT].c_str(), &reqBinary);
@@ -5872,7 +5888,7 @@ namespace sick_scan
       std::string runCmd = sopasCmdVec[CMD_RUN];
       std::string restartCmd = sopasCmdVec[CMD_REBOOT];
       std::string EEPCmd = sopasCmdVec[CMD_WRITE_EEPROM];
-      std::string UserLvlCmd = sopasCmdVec[CMD_SET_ACCESS_MODE_3];
+      std::string UserLvlCmd = cmdSetAccessMode3();
       result = (0 == sendSopasAndCheckAnswer(ipcommand, &ipcomandReply));
       result &= (0 == sendSopasAndCheckAnswer(EEPCmd, &resetReply));
       result &= (0 == sendSopasAndCheckAnswer(runCmd, &resetReply));
