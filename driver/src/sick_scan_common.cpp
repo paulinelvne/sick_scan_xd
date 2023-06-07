@@ -623,18 +623,29 @@ namespace sick_scan
 #if defined USE_DIAGNOSTIC_UPDATER
     if(diagnostics_)
     {
+      int num_active_layers = parser_->getCurrentParamPtr()->getNumberOfLayers();
       diagnostics_->setHardwareID("none");   // set from device after connection
+      expectedFrequency_ = parser_->getCurrentParamPtr()->getExpectedFrequency();
+      if ( (!m_scan_layer_filter_cfg.scan_layer_filter.empty()) // If an optional ScanLayerFilter is activated,
+        && (m_scan_layer_filter_cfg.num_layers > 1)            // and the lidar has more than 1 layer, 
+        && (m_scan_layer_filter_cfg.num_active_layers < m_scan_layer_filter_cfg.num_layers)) // and some layers are deactivated, then ...
+      {
+        // reduce expected frequency by factor (num_active_layers / num_layers)
+        expectedFrequency_ = expectedFrequency_ * m_scan_layer_filter_cfg.num_active_layers / m_scan_layer_filter_cfg.num_layers;
+        num_active_layers = m_scan_layer_filter_cfg.num_active_layers;
+      }
+      double max_timestamp_delay = 1.3 * num_active_layers / expectedFrequency_ - config_.time_offset;
 #if __ROS_VERSION == 1
       diagnosticPub_ = new diagnostic_updater::DiagnosedPublisher<ros_sensor_msgs::LaserScan>(pub_, *diagnostics_,
         // frequency should be target +- 10%.
         diagnostic_updater::FrequencyStatusParam(&expectedFrequency_, &expectedFrequency_, expected_frequency_tolerance, 10),
         // timestamp delta can be from 0.0 to 1.3x what it ideally is.
-        diagnostic_updater::TimeStampStatusParam(-1, 1.3 * 1.0 / expectedFrequency_ - config_.time_offset));
+        diagnostic_updater::TimeStampStatusParam(-1, max_timestamp_delay));
       ROS_ASSERT(diagnosticPub_ != NULL);
 #elif __ROS_VERSION == 2
       diagnosticPub_ = new DiagnosedPublishAdapter<rosPublisher<ros_sensor_msgs::LaserScan>>(pub_, *diagnostics_,
         diagnostic_updater::FrequencyStatusParam(&expectedFrequency_, &expectedFrequency_, expected_frequency_tolerance, 10), // frequency should be target +- 10%
-        diagnostic_updater::TimeStampStatusParam(-1, 1.3 * 1.0 / expectedFrequency_ - config_.time_offset));
+        diagnostic_updater::TimeStampStatusParam(-1, max_timestamp_delay));
       assert(diagnosticPub_ != NULL);
 #endif
     }
@@ -5958,9 +5969,11 @@ namespace sick_scan
     scan_layer_activated.clear();
     first_active_layer = INT_MAX;
     last_active_layer = -1;
+    num_layers = 0;
+    num_active_layers = 0;
     std::istringstream ascii_args(parameter);
     std::string ascii_arg;
-    for (int arg_cnt = 0, num_layers = 0; getline(ascii_args, ascii_arg, ' '); arg_cnt++)
+    for (int arg_cnt = 0; getline(ascii_args, ascii_arg, ' '); arg_cnt++)
     {
       int arg_val = -1;
       if (sscanf(ascii_arg.c_str(), "%d", &arg_val) == 1 && arg_val >= 0)
@@ -5975,6 +5988,7 @@ namespace sick_scan
           scan_layer_activated.push_back(arg_val);
           if (arg_val > 0)
           {
+            num_active_layers += 1;
             first_active_layer = MIN(layer, first_active_layer);
             last_active_layer = MAX(layer, last_active_layer);
           }

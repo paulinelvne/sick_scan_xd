@@ -536,6 +536,8 @@ namespace sick_scan
       std::vector<int> scan_layer_activated = std::vector<int>();
       int first_active_layer = -1;
       int last_active_layer = -1;
+      int num_layers = 0;
+      int num_active_layers = 0;
       void parse(const std::string& parameter);
       void print();
     };
