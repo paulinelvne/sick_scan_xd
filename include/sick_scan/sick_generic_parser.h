@@ -111,7 +111,9 @@ namespace sick_scan
   public:
     void setScannerName(std::string _s);
 
-    std::string getScannerName(void);
+    std::string getScannerName(void) const;
+
+    bool isOneOfScannerNames(const std::vector<std::string>& scanner_names) const;
 
     void setNumberOfLayers(int _layerNum);
 

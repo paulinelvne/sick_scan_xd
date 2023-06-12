@@ -94,9 +94,22 @@ namespace sick_scan
   \return Name of scanner
   \sa setScannerName
   */
-  std::string ScannerBasicParam::getScannerName()
+  std::string ScannerBasicParam::getScannerName() const
   {
     return (scannerName);
+  }
+
+  /*!
+  \brief Returns true, if the scanner name (type) is found int a given list of scanner names
+  */
+  bool ScannerBasicParam::isOneOfScannerNames(const std::vector<std::string>& scanner_names) const
+  {
+    for(int n = 0; n < scanner_names.size(); n++)
+    {
+      if (getScannerName().compare(scanner_names[n]) == 0)
+        return true;
+    }
+    return false;
   }
 
 

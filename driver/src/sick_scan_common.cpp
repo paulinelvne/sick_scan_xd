@@ -1479,14 +1479,16 @@ namespace sick_scan
 
     sopasCmdVec[CMD_STOP_IMU_DATA] = "\x02sEN InertialMeasurementUnit 0\x03";
     sopasCmdVec[CMD_START_IMU_DATA] = "\x02sEN InertialMeasurementUnit 1\x03";
-    sopasCmdVec[CMD_SET_ENCODER_MODE_NO] = "\x02sWN LICencset 0\x03";
-    sopasCmdVec[CMD_SET_ENCODER_MODE_SI] = "\x02sWN LICencset 1\x03";
-    sopasCmdVec[CMD_SET_ENCODER_MODE_DP] = "\x02sWN LICencset 2\x03";
-    sopasCmdVec[CMD_SET_ENCODER_MODE_DL] = "\x02sWN LICencset 3\x03";
-    sopasCmdVec[CMD_SET_INCREMENTSOURCE_ENC] = "\x02sWN LICsrc 1\x03";
-    sopasCmdVec[CMD_SET_3_4_TO_ENCODER] = "\x02sWN DO3And4Fnc 1\x03";
-    //TODO remove this and add param
-    sopasCmdVec[CMD_SET_ENOCDER_RES_1] = "\x02sWN LICencres 1\x03";
+
+    // Encoder settings
+    sopasCmdVec[CMD_SET_ENCODER_MODE_NO] = "\x02sWN LICencset 0\x03";  // Encoder setting: off (LMS1xx, LMS5xx, LMS4000, LRS4000)
+    sopasCmdVec[CMD_SET_ENCODER_MODE_SI] = "\x02sWN LICencset 1\x03";  // Encoder setting: single increment (LMS1xx, LMS5xx, LMS4000, LRS4000)
+    sopasCmdVec[CMD_SET_ENCODER_MODE_DP] = "\x02sWN LICencset 2\x03";  // Encoder setting: direction recognition phase (LMS1xx, LMS5xx, LMS4000, LRS4000)
+    sopasCmdVec[CMD_SET_ENCODER_MODE_DL] = "\x02sWN LICencset 3\x03";  // Encoder setting: direction recognition level (LMS1xx, LMS5xx, LMS4000, LRS4000)
+    sopasCmdVec[CMD_SET_ENCODER_MODE_FI] = "\x02sWN LICencset 4\x03";  // Encoder setting: fixed increment speed/ticks (LMS4000)
+    sopasCmdVec[CMD_SET_INCREMENTSOURCE_ENC] = "\x02sWN LICsrc 1\x03"; // LMS1xx, LMS5xx, LRS4000
+    sopasCmdVec[CMD_SET_3_4_TO_ENCODER] = "\x02sWN DO3And4Fnc 1\x03";  // Input state: encoder (LMS5xx)
+    sopasCmdVec[CMD_SET_ENOCDER_RES_1] = "\x02sWN LICencres 1\x03";    // LMS1xx, LMS5xx, LRS4000
 
     sopasCmdVec[CMD_SET_SCANDATACONFIGNAV] = "\x02sMN mLMPsetscancfg +2000 +1 +7500 +3600000 0 +2500 0 0 +2500 0 0 +2500 0 0\x03";
     /*
@@ -1977,39 +1979,50 @@ namespace sick_scan
     }
 
     //================== DEFINE ENCODER SETTING ==========================
-    int EncoderSetings = -1; //Do not use encoder commands as default
-    rosDeclareParam(nh, "encoder_mode", EncoderSetings);
-    rosGetParam(nh, "encoder_mode", EncoderSetings);
+    int EncoderSettings = -1; // Do not use encoder commands as default
+    rosDeclareParam(nh, "encoder_mode", EncoderSettings);
+    rosGetParam(nh, "encoder_mode", EncoderSettings);
 
-    this->parser_->getCurrentParamPtr()->setEncoderMode((int8_t) EncoderSetings);
-    if (parser_->getCurrentParamPtr()->getEncoderMode() >= 0)
+    this->parser_->getCurrentParamPtr()->setEncoderMode((int8_t)EncoderSettings);
+    if (this->parser_->getCurrentParamPtr()->getEncoderMode() >= 0) // EncoderSettings supported by LMS1xx, LMS5xx, LMS4000, LRS4000
     {
-      switch (parser_->getCurrentParamPtr()->getEncoderMode())
+      if (this->parser_->getCurrentParamPtr()->isOneOfScannerNames({SICK_SCANNER_LMS_5XX_NAME})) // LMS5xx only
       {
-        case 0:
-          sopasCmdChain.push_back(CMD_SET_3_4_TO_ENCODER);
-          sopasCmdChain.push_back(CMD_SET_INCREMENTSOURCE_ENC);
-          sopasCmdChain.push_back(CMD_SET_ENCODER_MODE_NO);
-          sopasCmdChain.push_back(CMD_SET_ENOCDER_RES_1);
-          break;
-        case 1:
-          sopasCmdChain.push_back(CMD_SET_3_4_TO_ENCODER);
-          sopasCmdChain.push_back(CMD_SET_INCREMENTSOURCE_ENC);
-          sopasCmdChain.push_back(CMD_SET_ENCODER_MODE_SI);
-          sopasCmdChain.push_back(CMD_SET_ENOCDER_RES_1);
-          break;
-        case 2:
-          sopasCmdChain.push_back(CMD_SET_3_4_TO_ENCODER);
-          sopasCmdChain.push_back(CMD_SET_INCREMENTSOURCE_ENC);
-          sopasCmdChain.push_back(CMD_SET_ENCODER_MODE_DP);
-          sopasCmdChain.push_back(CMD_SET_ENOCDER_RES_1);
-          break;
-        case 3:
-          sopasCmdChain.push_back(CMD_SET_3_4_TO_ENCODER);
-          sopasCmdChain.push_back(CMD_SET_INCREMENTSOURCE_ENC);
-          sopasCmdChain.push_back(CMD_SET_ENCODER_MODE_DL);
-          sopasCmdChain.push_back(CMD_SET_ENOCDER_RES_1);
-          break;
+        sopasCmdChain.push_back(CMD_SET_3_4_TO_ENCODER);
+      }
+      if (this->parser_->getCurrentParamPtr()->isOneOfScannerNames({SICK_SCANNER_LMS_1XX_NAME, SICK_SCANNER_LMS_5XX_NAME, SICK_SCANNER_LRS_4XXX_NAME})) // for LMS1xx, LMS5xx, LRS4000
+      {
+        sopasCmdChain.push_back(CMD_SET_INCREMENTSOURCE_ENC);
+      }
+      if (this->parser_->getCurrentParamPtr()->isOneOfScannerNames({SICK_SCANNER_LMS_1XX_NAME, SICK_SCANNER_LMS_5XX_NAME, SICK_SCANNER_LMS_4XXX_NAME, SICK_SCANNER_LRS_4XXX_NAME})) // for LMS1xx, LMS5xx, LMS4000, LRS4000
+      {
+        switch (parser_->getCurrentParamPtr()->getEncoderMode())
+        {
+          case 0:
+            sopasCmdChain.push_back(CMD_SET_ENCODER_MODE_NO);
+            break;
+          case 1:
+            sopasCmdChain.push_back(CMD_SET_ENCODER_MODE_SI);
+            break;
+          case 2:
+            sopasCmdChain.push_back(CMD_SET_ENCODER_MODE_DP);
+            break;
+          case 3:
+            sopasCmdChain.push_back(CMD_SET_ENCODER_MODE_DL);
+            break;
+          case 4:
+            if (this->parser_->getCurrentParamPtr()->isOneOfScannerNames({SICK_SCANNER_LRS_4XXX_NAME})) // for LMS4000 only
+            {
+              sopasCmdChain.push_back(CMD_SET_ENCODER_MODE_FI);
+            }
+            break;
+          default:
+            break;
+        }
+      }
+      if (this->parser_->getCurrentParamPtr()->isOneOfScannerNames({SICK_SCANNER_LMS_1XX_NAME, SICK_SCANNER_LMS_5XX_NAME, SICK_SCANNER_LRS_4XXX_NAME})) // for LMS1xx, LMS5xx, LRS4000
+      {
+        sopasCmdChain.push_back(CMD_SET_ENOCDER_RES_1);
       }
     }
     int result;
@@ -2058,8 +2071,8 @@ namespace sick_scan
 
     //TODO remove this and use getUseCfgList instead
     bool NAV3xxOutputRangeSpecialHandling=false;
-    if (this->parser_->getCurrentParamPtr()->getScannerName().compare(SICK_SCANNER_NAV_31X_NAME) == 0||
-        this->parser_->getCurrentParamPtr()->getScannerName().compare(SICK_SCANNER_LRS_36x0_NAME) == 0||
+    if (this->parser_->getCurrentParamPtr()->getScannerName().compare(SICK_SCANNER_NAV_31X_NAME) == 0 ||
+        this->parser_->getCurrentParamPtr()->getScannerName().compare(SICK_SCANNER_LRS_36x0_NAME) == 0 ||
         this->parser_->getCurrentParamPtr()->getScannerName().compare(SICK_SCANNER_LRS_36x1_NAME) == 0)
     {
       NAV3xxOutputRangeSpecialHandling = true;
@@ -3209,7 +3222,7 @@ namespace sick_scan
         const char *pcCmdMask = sopasCmdMaskVec[CMD_SET_PARTIAL_SCANDATA_CFG].c_str();
           sprintf(requestLMDscandatacfg, pcCmdMask, outputChannelFlagId, rssiFlag ? 1 : 0,
                   rssiResolutionIs16Bit ? 1 : 0,
-                EncoderSetings != -1 ? EncoderSetings : 0);
+                EncoderSettings != -1 ? EncoderSettings : 0);
         if (useBinaryCmd)
         {
           std::vector<unsigned char> reqBinary;
