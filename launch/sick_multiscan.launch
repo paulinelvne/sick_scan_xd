@@ -72,6 +72,7 @@
         <param name="client_authorization_pw" type="string" value="F4724744" />             <!-- Default password for client authorization -->
         
         <!-- MSR100 filter settings -->
+        <!-- Note: Setting host_LFPangleRangeFilter requires firmware version 1.2.2 or higher -->
         <param name="host_read_filtersettings" type="bool" value="True" />                                    <!-- Read multiScan136 settings for FREchoFilter, LFPangleRangeFilter and LFPlayerFilter at startup, default: true -->
         <param name="host_FREchoFilter" type="int" value="0" />                                               <!-- Optionally set FREchoFilter with 0 for FIRST_ECHO (default, EchoCount=1), 1 for ALL_ECHOS (EchoCount=3), or 2 for LAST_ECHO (EchoCount=1) -->
         <param name="host_set_FREchoFilter" type="bool" value="False" />                                      <!-- If true, FREchoFilter is set at startup (default: false) -->
