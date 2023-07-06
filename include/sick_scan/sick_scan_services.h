@@ -188,7 +188,17 @@ namespace sick_scan
     * convertFloatToHexString(-3.14, true) returns "C0490FDB"
     * convertFloatToHexString(+1.57, true) returns "3FC90FF8"
     */
-    static std::string convertFloatToHexString(float value, bool hexStrInBigEndian);
+    static std::string convertFloatToHexString(float value, bool hexStrIsBigEndian);
+
+    /*!
+    * Converts a hex string coded in 1/10000 deg (hex_str: 4 byte hex value as string, little or big endian) to an angle in [deg] (float).
+    */
+    static float convertHexStringToAngleDeg(const std::string& hex_str, bool hexStrIsBigEndian);
+
+    /*!
+    * Converts an angle in [deg] to hex string coded in 1/10000 deg (hex_str: 4 byte hex value as string, little or big endian).
+    */
+    static std::string convertAngleDegToHexString(float angle_deg, bool hexStrIsBigEndian);
 
   protected:
 

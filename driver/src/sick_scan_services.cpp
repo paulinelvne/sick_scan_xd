@@ -432,6 +432,7 @@ union FLOAT_BYTE32_UNION
 {
   uint8_t u8_bytes[4];
   uint32_t u32_bytes;
+  int32_t i32_bytes;
   float value;
 };
 
@@ -472,12 +473,12 @@ float sick_scan::SickScanServices::convertHexStringToFloat(const std::string& he
 * convertFloatToHexString(-3.14, true) returns "C0490FDB"
 * convertFloatToHexString(+1.57, true) returns "3FC90FF8"
 */
-std::string sick_scan::SickScanServices::convertFloatToHexString(float value, bool hexStrInBigEndian)
+std::string sick_scan::SickScanServices::convertFloatToHexString(float value, bool hexStrIsBigEndian)
 {
   FLOAT_BYTE32_UNION hex_buffer;
   hex_buffer.value = value;
   std::stringstream hex_str;
-  if(hexStrInBigEndian)
+  if(hexStrIsBigEndian)
   {
     for(int n = 3; n >= 0; n--)
       hex_str << std::setfill('0') << std::setw(2) << std::uppercase << std::hex << (int)(hex_buffer.u8_bytes[n]);
@@ -487,7 +488,60 @@ std::string sick_scan::SickScanServices::convertFloatToHexString(float value, bo
     for(int n = 0; n < 4; n++)
       hex_str << std::setfill('0') << std::setw(2) << std::uppercase << std::hex << (int)(hex_buffer.u8_bytes[n]);
   }
-  // ROS_DEBUG_STREAM("convertFloatToHexString(" << value << ", " << hexStrInBigEndian << "): " << hex_str.str());
+  // ROS_DEBUG_STREAM("convertFloatToHexString(" << value << ", " << hexStrIsBigEndian << "): " << hex_str.str());
+  return hex_str.str();
+}
+
+/*!
+* Converts a hex string coded in 1/10000 deg (hex_str: 4 byte hex value as string, little or big endian) to an angle in [deg] (float).
+*/
+float sick_scan::SickScanServices::convertHexStringToAngleDeg(const std::string& hex_str, bool hexStrIsBigEndian)
+{
+  char hex_str_8byte[9] = "00000000";
+  for(int m=7,n=hex_str.size()-1; n >= 0; m--,n--)
+    hex_str_8byte[m] = hex_str[n]; // fill with leading '0'
+  FLOAT_BYTE32_UNION hex_buffer;
+  if(hexStrIsBigEndian)
+  {
+    for(int m = 3, n = 1; n < 8; n+=2, m--)
+    {
+      char hexval[4] = { hex_str_8byte[n-1], hex_str_8byte[n], '\0', '\0' };
+      hex_buffer.u8_bytes[m] = (uint8_t)(std::strtoul(hexval, NULL, 16) & 0xFF);
+    }
+  }
+  else
+  {
+    for(int m = 0, n = 1; n < 8; n+=2, m++)
+    {
+      char hexval[4] = { hex_str_8byte[n-1], hex_str_8byte[n], '\0', '\0' };
+      hex_buffer.u8_bytes[m] = (uint8_t)(std::strtoul(hexval, NULL, 16) & 0xFF);
+    }
+  }
+  float angle_deg = (float)(hex_buffer.i32_bytes / 10000.0);
+  // ROS_DEBUG_STREAM("convertHexStringToAngleDeg(" << hex_str << ", " << hexStrIsBigEndian << "): " << angle_deg << " [deg]");
+  return angle_deg;
+}
+
+/*!
+* Converts an angle in [deg] to hex string coded in 1/10000 deg (hex_str: 4 byte hex value as string, little or big endian).
+*/
+std::string sick_scan::SickScanServices::convertAngleDegToHexString(float angle_deg, bool hexStrIsBigEndian)
+{
+  int32_t angle_val = (int32_t)std::round(angle_deg * 10000.0f);
+  FLOAT_BYTE32_UNION hex_buffer;
+  hex_buffer.i32_bytes = angle_val;
+  std::stringstream hex_str;
+  if(hexStrIsBigEndian)
+  {
+    for(int n = 3; n >= 0; n--)
+      hex_str << std::setfill('0') << std::setw(2) << std::uppercase << std::hex << (int)(hex_buffer.u8_bytes[n]);
+  }
+  else
+  {
+    for(int n = 0; n < 4; n++)
+      hex_str << std::setfill('0') << std::setw(2) << std::uppercase << std::hex << (int)(hex_buffer.u8_bytes[n]);
+  }
+  // ROS_DEBUG_STREAM("convertAngleDegToHexString(" << angle_deg << "  [deg], " << hexStrIsBigEndian << "): " << hex_str.str());
   return hex_str.str();
 }
 
@@ -570,7 +624,8 @@ bool sick_scan::SickScanServices::queryMultiScanFiltersettings(int& host_FREchoF
         parameter << filter_enabled;
         for(int n = 1; n < 5; n++) // <azimuth_start> <azimuth_stop> <elevation_start> <elevation_stop>
         {
-          float angle_deg = (convertHexStringToFloat(sopasToken[n], SCANSEGMENT_XD_SOPAS_ARGS_BIG_ENDIAN) * 180.0 / M_PI);
+          // float angle_deg = (convertHexStringToFloat(sopasToken[n], SCANSEGMENT_XD_SOPAS_ARGS_BIG_ENDIAN) * 180.0 / M_PI);
+          float angle_deg = convertHexStringToAngleDeg(sopasToken[n], SCANSEGMENT_XD_SOPAS_ARGS_BIG_ENDIAN);
           parameter << " " << angle_deg;
           if(filter_enabled)
             multiscan_angles_deg.push_back(angle_deg);
@@ -693,7 +748,10 @@ bool sick_scan::SickScanServices::writeMultiScanFiltersettings(int host_FREchoFi
     std::stringstream sopas_parameter;
     sopas_parameter << filter_enabled;
     for(int n = 0; n < angle_deg.size(); n++)
-      sopas_parameter << " " << convertFloatToHexString(angle_deg[n] * M_PI / 180, SCANSEGMENT_XD_SOPAS_ARGS_BIG_ENDIAN);
+    {
+      // sopas_parameter << " " << convertFloatToHexString(angle_deg[n] * M_PI / 180, SCANSEGMENT_XD_SOPAS_ARGS_BIG_ENDIAN);
+      sopas_parameter << " " << convertAngleDegToHexString(angle_deg[n], SCANSEGMENT_XD_SOPAS_ARGS_BIG_ENDIAN);
+    }
     sopas_parameter << " " << beam_increment;
     // Write LFPangleRangeFilter
     std::string sopasRequest = "sWN LFPangleRangeFilter " + sopas_parameter.str(), sopasExpectedResponse = "sWA LFPangleRangeFilter";
