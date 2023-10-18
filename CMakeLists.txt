@@ -156,6 +156,10 @@ if(${ENABLE_EMULATOR} OR ENABLE_EMULATOR EQUAL ON)
     endif()
 endif()
 
+# if(NOT WIN32)
+#     find_package(Curses REQUIRED) # sick_scan_xd_api_test on linux requires ncurses
+# endif()
+
 if(ROS_VERSION EQUAL 1)
     find_package(catkin REQUIRED COMPONENTS
         diagnostic_updater
@@ -738,13 +742,15 @@ add_executable(sick_scan_xd_api_test
     test/src/sick_scan_xd_api/sick_scan_xd_api_wrapper.c
     test/src/sick_scan_xd_api/toojpeg/toojpeg.cpp
 )
-target_include_directories(sick_scan_xd_api_test PUBLIC test/src/sick_scan_xd_api/toojpeg)
+target_include_directories(sick_scan_xd_api_test PUBLIC test/src/sick_scan_xd_api/toojpeg) # ${CURSES_INCLUDE_DIR})
 if(ROS_VERSION EQUAL 1)
-    target_link_libraries(sick_scan_xd_api_test ${catkin_LIBRARIES})
+    target_link_libraries(sick_scan_xd_api_test ${catkin_LIBRARIES}) # ${CURSES_LIBRARIES})
     add_dependencies(sick_scan_xd_api_test
         ${PROJECT_NAME}_gencfg
         ${catkin_EXPORTED_TARGETS}
         ${${PROJECT_NAME}_EXPORTED_TARGETS})
+else()
+    # target_link_libraries(sick_scan_xd_api_test ${CURSES_LIBRARIES})
 endif()
 if(ROS_VERSION EQUAL 0 AND NOT WIN32)
     target_link_options(sick_scan_xd_api_test PUBLIC "LINKER:--no-as-needed") # fixes exception "Enable multithreading to use std::thread: Operation not permitted" 
