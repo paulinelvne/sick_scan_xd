@@ -15,12 +15,32 @@ function killall_cleanup()
   killall_simu
 }
 
+# start static transforms for laserscan messages (all laserscan frame ids "world_1", "world_2", "world_3", ... "world_16"  for all layers are mapped to "world_6")
+function run_laserscan_frame_transformers()
+{
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_1  100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_2  100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_3  100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_4  100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_5  100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_7  100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_8  100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_9  100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_10 100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_11 100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_12 100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_13 100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_14 100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_15 100 &
+  rosrun tf static_transform_publisher 0 0 0 0 0 0 world_6 world_16 100 &
+}
+
 # Run multiscan simulation
 function run_multiscan_simu()
 {
   testcase=$1
   if [ $testcase == 0 ] ; then
-    sick_scan_xd_args=(sick_multiscan.launch hostname:="127.0.0.1" udp_receiver_ip:="127.0.0.1" scandataformat:=2)
+    sick_scan_xd_args=(sick_multiscan.launch hostname:="127.0.0.1" udp_receiver_ip:="127.0.0.1" scandataformat:=2 laserscan_layer_filter:="1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1")
     multiscan_pcap_player=(--pcap_filename=./src/sick_scan_xd/test/emulator/scandata/20231009-multiscan-compact-imu-01.pcapng --udp_port=-1 --repeat=1 --verbose=0 --filter=pcap_filter_multiscan_hildesheim --max_seconds=15)
   elif [ $testcase == 1 ] ; then
     sick_scan_xd_args=(sick_multiscan.launch hostname:="127.0.0.1" udp_receiver_ip:="127.0.0.1" scandataformat:=2 host_LFPangleRangeFilter:="1 -10.0 +30.0 -90.0 +90.0 1" host_set_LFPangleRangeFilter:="True")
@@ -46,6 +66,8 @@ function run_multiscan_simu()
   python3 ./src/sick_scan_xd/test/python/multiscan_sopas_test_server.py --tcp_port=2111 --cola_binary=0 &
   rosrun rviz rviz -d ./src/sick_scan_xd/test/emulator/config/rviz_cfg_multiscan_emu.rviz & 
   sleep 1
+  rosrun rviz rviz -d ./src/sick_scan_xd/test/emulator/config/rviz_cfg_multiscan_laserscan_360.rviz & 
+  sleep 1
   rosrun rviz rviz -d ./src/sick_scan_xd/test/emulator/config/rviz_cfg_multiscan_emu_360.rviz & 
   sleep 1
   
@@ -53,6 +75,9 @@ function run_multiscan_simu()
   echo -e "run_multiscan.bash: sick_scan_xd sick_multiscan.launch ..."
   roslaunch sick_scan_xd "${sick_scan_xd_args[@]}" &
   sleep 3 
+  
+  # Map all laserscan massages to frame id "world_6"
+  run_laserscan_frame_transformers
   
   # Start polar to cartesian pointcloud converter
   # polar pointcloud on topic "/cloud_polar_unstructured_fullframe" with fields "i", "range", "azimuth", "elevation" (input)

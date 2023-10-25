@@ -272,7 +272,7 @@ bool sick_scansegment_xd::UdpReceiver::Run(void)
                 }
                 // std::cout << "UdpReceiver: payload_length_bytes = " << payload_length_bytes << " byte" << std::endl;
                 // CRC check
-                size_t bytes_valid = std::min(bytes_received, (size_t)bytes_to_receive);
+                size_t bytes_valid = std::min<size_t>(bytes_received, (size_t)bytes_to_receive);
                 uint32_t u32PayloadCRC = Convert4Byte(udp_payload.data() + bytes_valid - sizeof(uint32_t)); // last 4 bytes are CRC
                 std::vector<uint8_t> msgpack_payload(udp_payload.begin() + udp_payload_offset, udp_payload.begin() + bytes_valid - sizeof(uint32_t));
                 uint32_t u32MsgPackCRC = crc32(0, msgpack_payload.data(), msgpack_payload.size());

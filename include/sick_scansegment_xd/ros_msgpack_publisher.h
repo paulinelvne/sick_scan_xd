@@ -352,24 +352,8 @@ namespace sick_scansegment_xd
         void convertPointsToCustomizedFieldsCloud(uint32_t timestamp_sec, uint32_t timestamp_nsec, const std::vector<std::vector<sick_scansegment_xd::PointXYZRAEI32f>>& lidar_points, 
             CustomPointCloudConfiguration& pointcloud_cfg, PointCloud2Msg& pointcloud_msg);
 
-        void convertPointsToLaserscanMsg(uint32_t timestamp_sec, uint32_t timestamp_nsec, const std::vector<std::vector<sick_scansegment_xd::PointXYZRAEI32f>>& lidar_points, size_t total_point_count, LaserScanMsgMap& laser_scan_msg_map, const std::string& frame_id);
+        void convertPointsToLaserscanMsg(uint32_t timestamp_sec, uint32_t timestamp_nsec, const std::vector<std::vector<sick_scansegment_xd::PointXYZRAEI32f>>& lidar_points, size_t total_point_count, LaserScanMsgMap& laser_scan_msg_map, const std::string& frame_id, bool is_fullframe);
 
-        /*
-        * Converts the lidarpoints from a msgpack to a PointCloud2Msg and to LaserScan messages for each layer.
-        * Note: For performance reasons, LaserScan messages are not created for the collected 360-degree scans (i.e. is_cloud_360 is true).
-        * @param[in] timestamp_sec seconds part of timestamp
-        * @param[in] timestamp_nsec  nanoseconds part of timestamp
-        * @param[in] last_timestamp_sec seconds part of last timestamp
-        * @param[in] last_timestamp_nsec  nanoseconds part of last timestamp
-        * @param[in] lidar_points list of PointXYZRAEI32f: lidar_points[echoIdx] are the points of one echo
-        * @param[in] total_point_count total number of points in all echos
-        * @param[out] pointcloud_msg cartesian pointcloud message
-        * @param[out] pointcloud_msg_polar polar pointcloud message
-        * @param[out] laser_scan_msg_map laserscan message: ros_sensor_msgs::LaserScan for each echo and layer is laser_scan_msg_map[echo][layer]
-        */
-        void convertPointsToCloud(uint32_t timestamp_sec, uint32_t timestamp_nsec, const std::vector<std::vector<sick_scansegment_xd::PointXYZRAEI32f>>& lidar_points, size_t total_point_count, 
-            PointCloud2Msg& pointcloud_msg, PointCloud2Msg& pointcloud_msg_polar, LaserScanMsgMap& laser_scan_msg_map, bool is_cloud_360, const std::string& frame_id);
-    
         /** Shortcut to publish a PointCloud2Msg */
         void publishPointCloud2Msg(rosNodePtr node, PointCloud2MsgPublisher& publisher, PointCloud2Msg& pointcloud_msg, int32_t num_echos, int32_t segment_idx, int coordinate_notation);
 
@@ -394,11 +378,7 @@ namespace sick_scansegment_xd
         float m_all_segments_elevation_min_deg = 0;   // angle range covering all segments: all segments pointcloud on topic publish_topic_all_segments is published, 
         float m_all_segments_elevation_max_deg = 0;   // if received segments cover elevation angle range from m_all_segments_elevation_min_deg to m_all_segments_elevation_max_deg.
         SegmentPointsCollector m_points_collector;    // collects all points of 12 segments (12 segments * 30 deg = 360 deg)
-        // std::string m_publish_topic;                      // ros topic to publish received msgpack data converted to PointCloud2 messages, default: "/cloud"
-        // std::string m_publish_topic_all_segments;         // ros topic to publish PointCloud2 messages of all segments (360 deg), default: "/cloud_fullframe"
-        // PointCloud2MsgPublisher m_publisher_cur_segment;  // ros publisher to publish PointCloud2 messages of the current segment
-        // PointCloud2MsgPublisher m_publisher_all_segments; // ros publisher to publish PointCloud2 messages of all segments (360 degree)
-        // LaserscanMsgPublisher m_publisher_laserscan_360;  // ros publisher to publish LaserScan messages of all segments (360 degree)
+        LaserscanMsgPublisher m_publisher_laserscan_360;     // ros publisher to publish LaserScan messages of all segments (360 degree)
         LaserscanMsgPublisher m_publisher_laserscan_segment; // ros publisher to publish LaserScan messages of the current segment
         double m_scan_time = 0;                              // scan_time = 1 / scan_frequency = time for a full 360-degree rotation of the sensor
         std::vector<int> m_laserscan_layer_filter;           // Configuration of laserscan messages (ROS only), activate/deactivate laserscan messages for each layer

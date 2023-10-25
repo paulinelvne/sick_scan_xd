@@ -6,15 +6,12 @@
     <arg name="hostname" default="192.168.0.1"/>                                    <!-- IP address of sensor -->
     <arg name="udp_receiver_ip" default=""/>                                        <!-- UDP destination IP address (ip address of udp receiver) -->
     <arg name="nodename" default="multiScan"/>
-
-    <!-- segment and fullframe pointclouds replaced by customized pointcloud configuration -->
-    <!-- arg name="publish_topic" default="/cloud" / -->                         <!-- ros topic to publish received msgpack data converted top PointCloud2 messages, default: "/cloud" -->
-    <!-- arg name="publish_topic_all_segments" default="/cloud_fullframe" / -->  <!-- ros topic to publish PointCloud2 messages of all segments (360 deg), default: "/cloud_fullframe" -->
-
-    <arg name="publish_frame_id" default="world" />                       <!-- frame id of ros Laserscan messages, default: "world" -->
+    <arg name="publish_frame_id" default="world" />                                 <!-- frame id of ros Laserscan messages, default: "world_<layer-id>" -->
+    <arg name="publish_laserscan_segment_topic" default="scan_segment" />           <!-- topic of ros Laserscan segment messages -->
+    <arg name="publish_laserscan_fullframe_topic" default="scan_fullframe" />       <!-- topic of ros Laserscan fullframe messages -->
     <arg name="add_transform_xyz_rpy" default="0,0,0,0,0,0"/>
     <arg name="add_transform_check_dynamic_updates" default="false"/>               <!-- Note: dynamical updates of parameter add_transform_xyz_rpy can decrease the performance and is therefor deactivated by default -->
-    <arg name="laserscan_layer_filter" default="0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0" /> <!-- Configuration of laserscan messages (ROS only), default: laserscan messages for layer 5 activated (elevation -0.07 degree, max number of scan points) -->
+    <arg name="laserscan_layer_filter" default="0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0" /> <!-- Configuration of laserscan messages (ROS only), default: laserscan messages for layer 6 activated (hires layer, elevation -0.07 deg) -->
     <arg name="scandataformat" default="2"/>                                        <!-- ScanDataFormat: 1 for msgpack or 2 for compact scandata, default: 2 -->
     <arg name="host_LFPangleRangeFilter" default="0 -180.0 +179.0 -90.0 +90.0 1" /> <!-- Optionally set LFPangleRangeFilter to "<enabled> <azimuth_start> <azimuth_stop> <elevation_start> <elevation_stop> <beam_increment>" with azimuth and elevation given in degree -->
     <arg name="host_set_LFPangleRangeFilter" default="False" />                     <!-- If true, LFPangleRangeFilter is set at startup (default: false) -->
@@ -32,7 +29,9 @@
         <param name="udp_sender" type="string" value="" />                                  <!-- Use "" (default) to receive msgpacks from any udp sender, use "127.0.0.1" to restrict to localhost (loopback device), or use the ip-address of a multiScan lidar or multiScan136 emulator -->
         <param name="udp_port" type="int" value="2115" />                                   <!-- default udp port for multiScan136 resp. multiScan136 emulator is 2115 -->
         <param name="segment_count" type="int" value="12" />                                <!-- number of expected segments in 360 degree, multiScan136: 12 segments, 30 degree per segment -->
-        <param name="publish_frame_id" type="string" value="$(arg publish_frame_id)" />     <!-- frame id of ros Laserscan messages, default: "world" -->
+        <param name="publish_frame_id" type="string" value="$(arg publish_frame_id)" />     <!-- frame id of ros Laserscan messages, default: "world_<layer-id>" -->
+        <param name="publish_laserscan_segment_topic" type="string" value="$(arg publish_laserscan_segment_topic)" />           <!-- topic of ros Laserscan segment messages -->
+        <param name="publish_laserscan_fullframe_topic" type="string" value="$(arg publish_laserscan_fullframe_topic)" />       <!-- topic of ros Laserscan fullframe messages -->
         <param name="udp_input_fifolength" type="int" value="20" />                         <!-- max. udp input fifo length(-1: unlimited, default: 20 for buffering 1 second at 20 Hz), elements will be removed from front if number of elements exceeds the fifo_length -->
         <param name="msgpack_output_fifolength" type="int" value="20" />                    <!-- max. msgpack output fifo length(-1: unlimited, default: 20 for buffering 1 second at 20 Hz), elements will be removed from front if number of elements exceeds the fifo_length -->
         <param name="verbose_level" type="int" value="1" />                                 <!-- verbose_level <= 0: quiet mode, verbose_level == 1: print statistics, verbose_level == 2: print details incl. msgpack data, default: 1 -->
@@ -99,10 +98,6 @@
         <!-- Use "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0" to activate resp. "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1" to activate laserscan messages for all 16 layers of the Multiscan136 -->
         <!-- Default is "0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0", i.e. laserscan messages for layer 5, (elevation -0.07 degree, max number of scan points) -->
         <param name="laserscan_layer_filter" type="string" value="$(arg laserscan_layer_filter)" />
-
-        <!-- segment and fullframe pointclouds replaced by customized pointcloud configuration -->
-        <!--param name="publish_topic" type="string" value="$(arg publish_topic)" / -->           <!-- ros topic to publish received msgpack data converted top PointCloud2 messages, default: "/cloud" -->
-        <!--param name="publish_topic_all_segments" type="string" value="$(arg publish_topic_all_segments)" / -->  <!-- ros topic to publish PointCloud2 messages of all segments (360 deg), default: "/cloud_fullframe" -->
 
         <!-- Configuration of customized pointclouds:
 
