@@ -53,6 +53,7 @@
  */
 
 #include <sick_scan/sick_generic_callback.h>
+#include "sick_scansegment_xd/compact_parser.h"
 #include "sick_scansegment_xd/ros_msgpack_publisher.h"
 #if defined ROSSIMU
 #include "sick_scan/pointcloud_utils.h"
@@ -186,6 +187,71 @@ std::string sick_scansegment_xd::CustomPointCloudConfiguration::printValuesEnabl
 		return s.str();
 }
 
+/* @brief Determine and initialize all_segments_min/max_deg by LFPangleRangeFilter
+** host_set_LFPangleRangeFilter = "<enabled> <azimuth_start> <azimuth_stop> <elevation_start> <elevation_stop> <beam_increment>" with azimuth and elevation given in degree
+** Returns true, if angleRangeFilterSettings are enabled, otherwise false.
+*/
+bool sick_scansegment_xd::RosMsgpackPublisher::initLFPangleRangeFilterSettings(const std::string& host_LFPangleRangeFilter)
+{
+	std::vector<std::string> parameter_token;
+	sick_scansegment_xd::util::parseVector(host_LFPangleRangeFilter, parameter_token, ' ');
+	try
+	{
+		if(parameter_token.size() >= 3 && std::stoi(parameter_token[0]) > 0) // LFPangleRangeFilter enabled, i.e. all_segments_min/max_deg given by LFPangleRangeFilter settings
+		{
+			float all_segments_azimuth_min_deg = std::stof(parameter_token[1]);
+			float all_segments_azimuth_max_deg = std::stof(parameter_token[2]);
+			m_all_segments_azimuth_min_deg = std::max<float>(m_all_segments_azimuth_min_deg, all_segments_azimuth_min_deg);
+			m_all_segments_azimuth_max_deg = std::min<float>(m_all_segments_azimuth_max_deg, all_segments_azimuth_max_deg);
+			return true;
+		}
+	}
+	catch(const std::exception& e)
+	{
+		ROS_ERROR_STREAM("## ERROR in RosMsgpackPublisher: can't parse LFPangleRangeFilter settings, exception " << e.what() << ", check LFPangleRangeFilter configuration in the launchfile");
+		throw e; // fatal error: rethrow exception, which will be caught in sick_generic_caller and handled by exiting with error
+	}
+	return false;
+}
+
+/* @brief Determine and initialize all_segments_elevation_min/max_deg by host_LFPlayerFilter"
+** host_LFPlayerFilter = "<enabled> <layer0enabled>  <layer1enabled> ...  <layer15enabled>", default: "0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1"
+** Returns true, if layerFilterSettings are enabled, otherwise false.
+*/
+bool sick_scansegment_xd::RosMsgpackPublisher::initLFPlayerFilterSettings(const std::string& host_LFPlayerFilter)
+{
+	std::vector<std::string> parameter_token;
+	sick_scansegment_xd::util::parseVector(host_LFPlayerFilter, parameter_token, ' ');
+	try
+	{
+		if(parameter_token.size() >= 17 && std::stoi(parameter_token[0]) > 0) // LFPlayerFilter enabled
+		{
+			float all_segments_elevation_min_deg = 999;
+			float all_segments_elevation_max_deg = -999;
+			for(int n = 1; n < parameter_token.size(); n++)
+			{
+				if(std::stoi(parameter_token[n]) > 0)
+				{
+					float layer_elevation_deg = sick_scansegment_xd::CompactDataParser::GetElevationDegFromLayerIdx(n - 1);
+					all_segments_elevation_min_deg = std::min<float>(all_segments_elevation_min_deg, layer_elevation_deg);
+					all_segments_elevation_max_deg = std::max<float>(all_segments_elevation_max_deg, layer_elevation_deg);
+				}
+			}
+			if (all_segments_elevation_max_deg > all_segments_elevation_min_deg)
+			{
+				m_all_segments_elevation_min_deg = all_segments_elevation_min_deg;
+				m_all_segments_elevation_max_deg = all_segments_elevation_max_deg;
+				return true;
+			}
+		}
+	}
+	catch(const std::exception& e)
+	{
+		ROS_ERROR_STREAM("## ERROR in RosMsgpackPublisher: can't parse initLFPlayerFilterSettings settings, exception " << e.what() << ", check initLFPlayerFilterSettings configuration in the launchfile");
+		throw e; // fatal error: rethrow exception, which will be caught in sick_generic_caller and handled by exiting with error
+	}
+	return false;
+}
 
 /*
  * @brief RosMsgpackPublisher constructor
@@ -211,25 +277,11 @@ sick_scansegment_xd::RosMsgpackPublisher::RosMsgpackPublisher(const std::string&
   m_all_segments_azimuth_max_deg = (float)config.all_segments_max_deg;
 	if (config.host_set_LFPangleRangeFilter) 
 	{
-		// Determine all_segments_min/max_deg by LFPangleRangeFilter
-		// host_set_LFPangleRangeFilter = "<enabled> <azimuth_start> <azimuth_stop> <elevation_start> <elevation_stop> <beam_increment>" with azimuth and elevation given in degree
-    std::vector<std::string> parameter_token;
-    sick_scansegment_xd::util::parseVector(config.host_LFPangleRangeFilter, parameter_token, ' ');
-		try
-		{
-			if(parameter_token.size() >= 3 && std::stoi(parameter_token[0]) > 0) // LFPangleRangeFilter enabled, i.e. all_segments_min/max_deg given by LFPangleRangeFilter settings
-			{
-				float all_segments_azimuth_min_deg = std::stof(parameter_token[1]);
-				float all_segments_azimuth_max_deg = std::stof(parameter_token[2]);
-				m_all_segments_azimuth_min_deg = std::max<float>(m_all_segments_azimuth_min_deg, all_segments_azimuth_min_deg);
-				m_all_segments_azimuth_max_deg = std::min<float>(m_all_segments_azimuth_max_deg, all_segments_azimuth_max_deg);
-			}
-		}
-		catch(const std::exception& e)
-		{
-			ROS_ERROR_STREAM("## ERROR in RosMsgpackPublisher: can't parse LFPangleRangeFilter settings, exception " << e.what() << ", check LFPangleRangeFilter configuration in the launchfile");
-			throw e; // fatal error: rethrow exception, which will be caught in sick_generic_caller and handled by exiting with error
-		}
+		initLFPangleRangeFilterSettings(config.host_LFPangleRangeFilter);
+	}
+	if (config.host_set_LFPlayerFilter) 
+	{
+		initLFPlayerFilterSettings(config.host_LFPlayerFilter);
 	}
 
 #if defined __ROS_VERSION && __ROS_VERSION > 1 // ROS-2 publisher
@@ -373,7 +425,55 @@ sick_scansegment_xd::RosMsgpackPublisher::~RosMsgpackPublisher()
 {
 }
 
-        /** Shortcut to publish a PointCloud2Msg */
+/** Prints (elevation,azimuth) values of all lidar points */
+std::string sick_scansegment_xd::RosMsgpackPublisher::printElevationAzimuthTable(const std::vector<std::vector<sick_scansegment_xd::PointXYZRAEI32f>>& lidar_points)
+{
+	std::stringstream s;
+	for (int echoIdx = 0; echoIdx < lidar_points.size(); echoIdx++)
+	{
+		s << (echoIdx > 0 ? ", " : "") << "echo" << echoIdx << ":[";
+		int last_elevation_mdeg = -99999, last_azimuth_ideg = -99999;
+		for (int n = 0; n < lidar_points[echoIdx].size(); n++)
+		{
+			const sick_scansegment_xd::PointXYZRAEI32f& point = lidar_points[echoIdx][n];
+			float elevation_deg = point.elevation * 180.0f / (float)M_PI;
+			float azimuth_fdeg = point.azimuth * 180.0f / (float)M_PI;
+			int elevation_mdeg = (int)(1000.0f * elevation_deg);
+			int azimuth_ideg = (int)(azimuth_fdeg);
+			if (elevation_mdeg != last_elevation_mdeg || azimuth_ideg != last_azimuth_ideg)
+				s << (n > 0 ? "," : "") << " (" << (elevation_mdeg/1000) << "," << azimuth_ideg << ")";
+			last_elevation_mdeg = elevation_mdeg;
+			last_azimuth_ideg = azimuth_ideg;
+		}
+		s << " ]";
+	}
+
+	return s.str();
+}
+
+
+/** Prints (elevation,azimuth) values of the coverage table of collected lidar points */
+std::string sick_scansegment_xd::RosMsgpackPublisher::printCoverageTable(const std::map<int, std::map<int, int>>& elevation_azimuth_histograms)
+{
+	std::stringstream s;
+	s << "[";
+	for (std::map<int, std::map<int, int>>::const_iterator coverage_elevation_iter = elevation_azimuth_histograms.cbegin(); coverage_elevation_iter != elevation_azimuth_histograms.cend(); coverage_elevation_iter++)
+	{
+		int elevation_mdeg = coverage_elevation_iter->first;
+		const std::map<int, int>& azimuth_histogram = coverage_elevation_iter->second;
+		for (std::map<int, int>::const_iterator coverage_azimuth_iter = azimuth_histogram.cbegin(); coverage_azimuth_iter != azimuth_histogram.cend(); coverage_azimuth_iter++)
+		{
+			const int& azimuth_ideg = coverage_azimuth_iter->first;
+			const int& azimuth_cnt = coverage_azimuth_iter->second;
+			if (azimuth_cnt > 0)
+				s << " (" << (elevation_mdeg/1000) << "," << azimuth_ideg << "),";
+		}
+	}
+	s << " ]";
+  return s.str();
+}
+
+/** Shortcut to publish a PointCloud2Msg */
 void sick_scansegment_xd::RosMsgpackPublisher::publishPointCloud2Msg(rosNodePtr node, PointCloud2MsgPublisher& publisher, PointCloud2Msg& pointcloud_msg, int32_t num_echos, int32_t segment_idx, int coordinate_notation)
 {
   if (coordinate_notation == 0) // coordinateNotation=0: cartesian (default, pointcloud has fields x,y,z,i) => notify cartesian pointcloud listener
@@ -829,7 +929,7 @@ void sick_scansegment_xd::RosMsgpackPublisher::HandleMsgPackData(const sick_scan
 		}
 	}
 	
-    // Versendung von Vollumläufen als ROS-Nachricht:
+  // Versendung von Vollumläufen als ROS-Nachricht:
 	// a. Prozess läuft an
 	// b. Segmente werden verworfen, bis ein Segment mit Startwinkel 0° eintrifft.
 	// c. Es werden dann 12 Segmente aufgesammelt, bis 360° erreicht sind.
@@ -842,12 +942,17 @@ void sick_scansegment_xd::RosMsgpackPublisher::HandleMsgPackData(const sick_scan
 	// 	  iv.  Konfiguration erfolgt über YAML-Datei.
 	// if(m_publish_topic_all_segments != "")
 	{
+		// ROS_INFO_STREAM("RosMsgpackPublisher::HandleMsgPackData(): check allSegmentsCovered, segment_idx=" << segment_idx);
+  	// ROS_DEBUG_STREAM("    RosMsgpackPublisher::HandleMsgPackData(): collected azimuth table = " << printElevationAzimuthTable(m_points_collector.lidar_points));
 		float precheck_min_azimuth_deg = m_points_collector.min_azimuth * 180.0f / (float)M_PI;
 		float precheck_max_azimuth_deg = m_points_collector.max_azimuth * 180.0f / (float)M_PI;
 		bool publish_cloud_360 = (precheck_max_azimuth_deg - precheck_min_azimuth_deg + 1 >= m_all_segments_azimuth_max_deg - m_all_segments_azimuth_min_deg - 1) // fast pre-check
 		    && m_points_collector.allSegmentsCovered(m_all_segments_azimuth_min_deg, m_all_segments_azimuth_max_deg, m_all_segments_elevation_min_deg, m_all_segments_elevation_max_deg); // all segments collected in m_points_collector
-		// ROS_INFO_STREAM("RosMsgpackPublisher::HandleMsgPackData(): segment_idx=" << segment_idx << ", m_points_collector.lastSegmentIdx=" << m_points_collector.lastSegmentIdx() 
-		//     << ", m_points_collector.total_point_count=" << m_points_collector.total_point_count << ", m_points_collector.allSegmentsCovered=" << publish_cloud_360);
+		// ROS_INFO_STREAM("    RosMsgpackPublisher::HandleMsgPackData(): segment_idx=" << segment_idx << ", m_points_collector.lastSegmentIdx=" << m_points_collector.lastSegmentIdx() 
+		//     << ", m_points_collector.total_point_count=" << m_points_collector.total_point_count 
+		//     << ", azimuth_range_collected=(" << precheck_min_azimuth_deg << "," << precheck_max_azimuth_deg << ")=" << (precheck_max_azimuth_deg - precheck_min_azimuth_deg)
+		//     << ", azimuth_range_configured=(" << m_all_segments_azimuth_min_deg << "," << m_all_segments_azimuth_max_deg << ")=" << (m_all_segments_azimuth_max_deg - m_all_segments_azimuth_min_deg)
+		//     << ", m_points_collector.allSegmentsCovered=" << publish_cloud_360);
 		if (m_points_collector.total_point_count <= 0 || m_points_collector.telegram_cnt <= 0 || publish_cloud_360 || m_points_collector.lastSegmentIdx() > segment_idx) 
 		{
 			// 1. publish 360 degree point cloud if all segments collected
@@ -855,32 +960,32 @@ void sick_scansegment_xd::RosMsgpackPublisher::HandleMsgPackData(const sick_scan
 			if (m_points_collector.total_point_count > 0 && m_points_collector.telegram_cnt > 0 && publish_cloud_360)
 			{
 				// publish 360 degree point cloud
-					// scan_time = 1 / scan_frequency = time for a full 360-degree rotation of the sensor
-          m_scan_time = (msgpack_data.timestamp_sec + 1.0e-9 * msgpack_data.timestamp_nsec) - (m_points_collector.timestamp_sec + 1.0e-9 * m_points_collector.timestamp_nsec);
-          for (int cloud_cnt = 0; cloud_cnt < m_custom_pointclouds_cfg.size(); cloud_cnt++)
+				// scan_time = 1 / scan_frequency = time for a full 360-degree rotation of the sensor
+				m_scan_time = (msgpack_data.timestamp_sec + 1.0e-9 * msgpack_data.timestamp_nsec) - (m_points_collector.timestamp_sec + 1.0e-9 * m_points_collector.timestamp_nsec);
+				for (int cloud_cnt = 0; cloud_cnt < m_custom_pointclouds_cfg.size(); cloud_cnt++)
+				{
+					CustomPointCloudConfiguration& custom_pointcloud_cfg = m_custom_pointclouds_cfg[cloud_cnt];
+					if (custom_pointcloud_cfg.publish() && custom_pointcloud_cfg.fullframe())
 					{
-		        CustomPointCloudConfiguration& custom_pointcloud_cfg = m_custom_pointclouds_cfg[cloud_cnt];
-						if (custom_pointcloud_cfg.publish() && custom_pointcloud_cfg.fullframe())
-						{
-							PointCloud2Msg pointcloud_msg_custom_fields;
-              convertPointsToCustomizedFieldsCloud(m_points_collector.timestamp_sec, m_points_collector.timestamp_nsec, m_points_collector.lidar_points, custom_pointcloud_cfg, pointcloud_msg_custom_fields);
-              publishPointCloud2Msg(m_node, custom_pointcloud_cfg.publisher(), pointcloud_msg_custom_fields, std::max(1, (int)echo_count), -1, custom_pointcloud_cfg.coordinateNotation());
-							ROS_DEBUG_STREAM("publishPointCloud2Msg: " << pointcloud_msg_custom_fields.width << "x" << pointcloud_msg_custom_fields.height << " pointcloud, " << pointcloud_msg_custom_fields.fields.size() << " fields/point, " << pointcloud_msg_custom_fields.data.size() << " bytes");
-						}
+						PointCloud2Msg pointcloud_msg_custom_fields;
+						convertPointsToCustomizedFieldsCloud(m_points_collector.timestamp_sec, m_points_collector.timestamp_nsec, m_points_collector.lidar_points, custom_pointcloud_cfg, pointcloud_msg_custom_fields);
+						publishPointCloud2Msg(m_node, custom_pointcloud_cfg.publisher(), pointcloud_msg_custom_fields, std::max(1, (int)echo_count), -1, custom_pointcloud_cfg.coordinateNotation());
+						// ROS_INFO_STREAM("RosMsgpackPublisher::HandleMsgPackData(): published " << pointcloud_msg_custom_fields.width << "x" << pointcloud_msg_custom_fields.height << " pointcloud, " << pointcloud_msg_custom_fields.fields.size() << " fields/point, " << pointcloud_msg_custom_fields.data.size() << " bytes");
 					}
-					// PointCloud2Msg pointcloud_msg, pointcloud_msg_polar;
-          // LaserScanMsgMap laser_scan_msg_map; // laser_scan_msg_map[echo][layer] := LaserScan message given echo (Multiscan136: max 3 echos) and layer index (Multiscan136: 16 layer)
-					// convertPointsToLaserscanMsg(m_points_collector.timestamp_sec, m_points_collector.timestamp_nsec, m_points_collector.lidar_points, m_points_collector.total_point_count, laser_scan_msg_map, m_frame_id);
-					// publishLaserscanMsg(m_node, m_publisher_laserscan_360, laser_scan_msg_map, std::max(1, (int)echo_count), -1);
-					// segment and fullframe pointclouds replaced by customized pointcloud configuration
-					// convertPointsToCloud(m_points_collector.timestamp_sec, m_points_collector.timestamp_nsec, m_points_collector.lidar_points, m_points_collector.total_point_count, 
-					//     pointcloud_msg, pointcloud_msg_polar, laser_scan_msg_map, true, m_frame_id);
-					// publish(m_node, m_publisher_all_segments, pointcloud_msg, pointcloud_msg_polar, m_publisher_laserscan_360, laser_scan_msg_map, 
-					//     std::max(1, (int)echo_count), -1); // pointcloud, number of echos, segment index (or -1 if pointcloud contains data from multiple segments)
-					// ROS_INFO_STREAM("RosMsgpackPublisher::HandleMsgPackData(): cloud_fullframe published, " << m_points_collector.total_point_count << " points, " << pointcloud_msg.data.size() << " byte, "
-					//     << m_points_collector.segment_list.size() << " segments (" << sick_scansegment_xd::util::printVector(m_points_collector.segment_list, ",") << "), "
-					//     << m_points_collector.telegram_list.size() << " telegrams (" << sick_scansegment_xd::util::printVector(m_points_collector.telegram_list, ",") << "), "
-					//     << "min_azimuth=" << (m_points_collector.min_azimuth * 180.0 / M_PI) << ", max_azimuth=" << (m_points_collector.max_azimuth * 180.0 / M_PI) << " [deg]");
+				}
+				// PointCloud2Msg pointcloud_msg, pointcloud_msg_polar;
+				// LaserScanMsgMap laser_scan_msg_map; // laser_scan_msg_map[echo][layer] := LaserScan message given echo (Multiscan136: max 3 echos) and layer index (Multiscan136: 16 layer)
+				// convertPointsToLaserscanMsg(m_points_collector.timestamp_sec, m_points_collector.timestamp_nsec, m_points_collector.lidar_points, m_points_collector.total_point_count, laser_scan_msg_map, m_frame_id);
+				// publishLaserscanMsg(m_node, m_publisher_laserscan_360, laser_scan_msg_map, std::max(1, (int)echo_count), -1);
+				// segment and fullframe pointclouds replaced by customized pointcloud configuration
+				// convertPointsToCloud(m_points_collector.timestamp_sec, m_points_collector.timestamp_nsec, m_points_collector.lidar_points, m_points_collector.total_point_count, 
+				//     pointcloud_msg, pointcloud_msg_polar, laser_scan_msg_map, true, m_frame_id);
+				// publish(m_node, m_publisher_all_segments, pointcloud_msg, pointcloud_msg_polar, m_publisher_laserscan_360, laser_scan_msg_map, 
+				//     std::max(1, (int)echo_count), -1); // pointcloud, number of echos, segment index (or -1 if pointcloud contains data from multiple segments)
+				// ROS_INFO_STREAM("RosMsgpackPublisher::HandleMsgPackData(): cloud_fullframe published, " << m_points_collector.total_point_count << " points, " << pointcloud_msg.data.size() << " byte, "
+				//     << m_points_collector.segment_list.size() << " segments (" << sick_scansegment_xd::util::printVector(m_points_collector.segment_list, ",") << "), "
+				//     << m_points_collector.telegram_list.size() << " telegrams (" << sick_scansegment_xd::util::printVector(m_points_collector.telegram_list, ",") << "), "
+				//     << "min_azimuth=" << (m_points_collector.min_azimuth * 180.0 / M_PI) << ", max_azimuth=" << (m_points_collector.max_azimuth * 180.0 / M_PI) << " [deg]");
 			}
 			// Start a new 360 degree collection
 			m_points_collector = SegmentPointsCollector(telegram_cnt);
@@ -893,8 +998,13 @@ void sick_scansegment_xd::RosMsgpackPublisher::HandleMsgPackData(const sick_scan
 			m_points_collector.appendLidarPoints(lidar_points, segment_idx, telegram_cnt);
 			m_points_collector.min_azimuth = lidar_points_min_azimuth;
 			m_points_collector.max_azimuth = lidar_points_max_azimuth;
+		  // ROS_INFO_STREAM("RosMsgpackPublisher::HandleMsgPackData(): started new point collection with segment_idx=" << segment_idx);
+		  // ROS_INFO_STREAM("    RosMsgpackPublisher::HandleMsgPackData(): appendLidarPoints, lidar_points_min_azimuth=" << (lidar_points_min_azimuth * 180.0f / M_PI) << ", lidar_points_max_azimuth=" << (lidar_points_max_azimuth* 180.0f / M_PI));
+  		// ROS_DEBUG_STREAM("    RosMsgpackPublisher::HandleMsgPackData(): appendLidarPoints, azimuth table = " << printElevationAzimuthTable(lidar_points));
+    	// ROS_DEBUG_STREAM("    RosMsgpackPublisher::HandleMsgPackData(): appendLidarPoints, collected azimuth table = " << printElevationAzimuthTable(m_points_collector.lidar_points));
+  		// ROS_DEBUG_STREAM("    RosMsgpackPublisher::HandleMsgPackData(): appendLidarPoints, collected coverage table = " << printCoverageTable(m_points_collector.segment_coverage));
 		}
-		else if (telegram_cnt == m_points_collector.telegram_cnt + 1) // append lidar points to m_points_collector
+		else if (telegram_cnt > m_points_collector.telegram_cnt) // append lidar points to m_points_collector
 		{
 			if (m_points_collector.lidar_points.size() < lidar_points.size())
 				m_points_collector.lidar_points.resize(lidar_points.size());
@@ -904,6 +1014,10 @@ void sick_scansegment_xd::RosMsgpackPublisher::HandleMsgPackData(const sick_scan
 			m_points_collector.appendLidarPoints(lidar_points, segment_idx, telegram_cnt);
 			m_points_collector.min_azimuth = std::min(m_points_collector.min_azimuth, lidar_points_min_azimuth);
 			m_points_collector.max_azimuth = std::max(m_points_collector.max_azimuth, lidar_points_max_azimuth);
+		  // ROS_INFO_STREAM("    RosMsgpackPublisher::HandleMsgPackData(): appendLidarPoints, lidar_points_min_azimuth=" << (lidar_points_min_azimuth * 180.0f / M_PI) << ", lidar_points_max_azimuth=" << (lidar_points_max_azimuth* 180.0f / M_PI));
+  		// ROS_DEBUG_STREAM("    RosMsgpackPublisher::HandleMsgPackData(): appendLidarPoints, azimuth table = " << printElevationAzimuthTable(lidar_points));
+    	// ROS_DEBUG_STREAM("    RosMsgpackPublisher::HandleMsgPackData(): appendLidarPoints, collected azimuth table = " << printElevationAzimuthTable(m_points_collector.lidar_points));
+  		// ROS_DEBUG_STREAM("    RosMsgpackPublisher::HandleMsgPackData(): appendLidarPoints, collected coverage table = " << printCoverageTable(m_points_collector.segment_coverage));
 		}
 		else
 		{

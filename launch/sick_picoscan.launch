@@ -42,21 +42,6 @@
         <param name="udp_timeout_ms" type="int" value="60000" />                            <!-- Timeout for udp messages in milliseconds, default: 60*1000 -->
         <param name="scandataformat" type="int" value="$(arg scandataformat)" />            <!-- ScanDataFormat: 1 for msgpack or 2 for compact scandata, default: 1 -->
         
-        <!-- Optional range filter configuration: If the range of a scan point is less than range_min or greater than range_max, the point can be filtered. -->
-        <!-- Depending on parameter range_filter_handling, the following filter can be applied for points with a range not within [range_min, range_max],   -->
-        <!-- see enumeration RangeFilterResultHandling in range_filter.h:                                           -->
-        <!--   0: RANGE_FILTER_DEACTIVATED,  do not apply range filter (default)                                    -->
-        <!--   1: RANGE_FILTER_DROP,         drop point, if range is not within [range_min, range_max]              -->
-        <!--   2: RANGE_FILTER_TO_ZERO,      set range to 0, if range is not within [range_min, range_max]          -->
-        <!--   3: RANGE_FILTER_TO_RANGE_MAX, set range to range_max, if range is not within [range_min, range_max]  -->
-        <!--   4: RANGE_FILTER_TO_FLT_MAX,   set range to FLT_MAX, if range is not within [range_min, range_max]    -->
-        <!--   5: RANGE_FILTER_TO_NAN        set range to NAN, if range is not within [range_min, range_max]        -->
-        <!-- Note: Range filter applies only to Pointcloud messages, not to LaserScan messages.                     -->
-        <!-- Using range_filter_handling 4 or 5 requires handling of FLT_MAX and NAN values in an application.      -->
-        <param name="range_min" type="double" value="0.0"/>
-        <param name="range_max" type="double" value="120.0"/>
-        <param name="range_filter_handling" type="int" value="0"/>
-        
         <!-- Apply an additional transform to the cartesian pointcloud, default: "0,0,0,0,0,0" (i.e. no transform) -->
         <!-- Note: add_transform_xyz_rpy is specified by 6D pose x, y, z, roll, pitch, yaw in [m] resp. [rad] -->
         <!-- It transforms a 3D point in cloud coordinates to 3D point in user defined world coordinates: --> 
@@ -90,6 +75,11 @@
         <param name="msgpack_validator_elevation_end" type="double" value="0.0" />                            <!-- picoScan150: 1 layer -->
         <param name="msgpack_validator_valid_segments" type="string" value="0 1 2 3 4 5 6 7 8" />             <!-- indices of valid segmentes, default for full scan: 9 segments -->
         <param name="msgpack_validator_layer_filter" type="string" value="1" />                               <!-- picoScan150: 1 layer -->
+
+        <!-- Configuration of laserscan messages (ROS only): -->
+        <!-- Parameter "laserscan_layer_filter" sets a mask to create laserscan messages for configured layer (0: no laserscan message, 1: create laserscan messages for this layer) -->
+        <!-- Use "1" to activate resp. "0" to deactivate laserscan messages (picoScan has just 1 layer) -->
+        <param name="laserscan_layer_filter" type="string" value="1" />
 
         <!-- segment and fullframe pointclouds replaced by customized pointcloud configuration -->
         <!--param name="publish_topic" type="string" value="$(arg publish_topic)" / -->           <!-- ros topic to publish received msgpack data converted top PointCloud2 messages, default: "/cloud" -->
@@ -142,7 +132,6 @@
         Optional parameter "rangeFilter" configures how invalid measurements are filtered in the customized pointcloud.
             rangeFilter=<range_min>,<range_max>,<filter_flag>
         The range (distance) of invalid scan points is 0 and can be filtered, i.e. removed from the pointcloud or set to 0, FLT_MAX or NAN.
-        Parameter "rangeFilter" of a customized pointcloud works the same way as the general parameter "range_min", "range_max" and "range_filter_handling":
         If the range (distance) of a scan point is less than <range_min> or greater than <range_max>, this point is filtered depending on <filter_flag>:
             <filter_flag> = 0: RANGE_FILTER_DEACTIVATED,  do not apply range filter (default)
             <filter_flag> = 1: RANGE_FILTER_DROP,         drop point, if range is not within [range_min, range_max]
