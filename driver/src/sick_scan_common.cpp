@@ -183,6 +183,20 @@ const std::string binScanfGetStringFromVec(std::vector<unsigned char> *replyDumm
   return (s);
 }
 
+static char getFirmwareVersionIdMRS1xxx(const std::string& deviceIdentStr) // Get MRS1xxx firmware version from device ident string
+{
+  size_t device_idx = deviceIdentStr.find("MRS1xxx"); // Get MRS1xxx version from device ident string
+  size_t version_idx = ((device_idx != std::string::npos) ? deviceIdentStr.find("V", device_idx) : std::string::npos);
+  char version_id = ((version_idx != std::string::npos) ? deviceIdentStr[version_idx + 1] : '0');
+  return version_id;
+}
+
+static bool& isFieldEvaluationActive()
+{
+  static bool field_evaluation_active = false;
+  return field_evaluation_active;
+}
+
 namespace sick_scan_xd
 {
   /*!
@@ -1496,6 +1510,7 @@ namespace sick_scan_xd
     sopasCmdVec[CMD_APPLICATION_MODE_FIELD_ON] = "\x02sWN SetActiveApplications 1 FEVL 1\x03"; // <STX>sWN{SPC}SetActiveApplications{SPC}1{SPC}FEVL{SPC}1<ETX>
     sopasCmdVec[CMD_APPLICATION_MODE_FIELD_OFF] = "\x02sWN SetActiveApplications 1 FEVL 0\x03"; // <STX>sWN{SPC}SetActiveApplications{SPC}1{SPC}FEVL{SPC}0<ETX>
     sopasCmdVec[CMD_APPLICATION_MODE_RANGING_ON] = "\x02sWN SetActiveApplications 1 RANG 1\x03";
+    sopasCmdVec[CMD_READ_ACTIVE_APPLICATIONS] = "\x02sRN SetActiveApplications\x03";
     sopasCmdVec[CMD_SET_TO_COLA_A_PROTOCOL] = "\x02sWN EIHstCola 0\x03";
     sopasCmdVec[CMD_GET_PARTIAL_SCANDATA_CFG] = "\x02sRN LMDscandatacfg\x03";//<STX>sMN{SPC}mLMPsetscancfg{SPC } +5000{SPC}+1{SPC}+5000{SPC}-450000{SPC}+2250000<ETX>
     sopasCmdVec[CMD_GET_PARTIAL_SCAN_CFG] = "\x02sRN LMPscancfg\x03";
@@ -1645,6 +1660,7 @@ namespace sick_scan_xd
     // sopasCmdErrMsg[CMD_ALIGNMENT_MODE] = "Error setting Alignmentmode";
     sopasCmdErrMsg[CMD_SCAN_LAYER_FILTER] = "Error setting ScanLayerFilter";
     sopasCmdErrMsg[CMD_APPLICATION_MODE] = "Error setting Meanfilter";
+    sopasCmdErrMsg[CMD_READ_ACTIVE_APPLICATIONS] = "Error reading active applications by \"sRA SetActiveApplications\"";
     sopasCmdErrMsg[CMD_SET_ACCESS_MODE_3] = "Error Access Mode Client";
     sopasCmdErrMsg[CMD_SET_ACCESS_MODE_3_SAFETY_SCANNER] = "Error Access Mode Client";
     sopasCmdErrMsg[CMD_SET_OUTPUT_RANGES] = "Error setting angular ranges";
@@ -1776,6 +1792,10 @@ namespace sick_scan_xd
     if (tryToStopMeasurement)
     {
       sopasCmdChain.push_back(CMD_STOP_MEASUREMENT);
+      if (parser_->getCurrentParamPtr()->getScannerName().compare(SICK_SCANNER_MRS_1XXX_NAME) == 0)
+      {
+          sopasCmdChain.push_back(CMD_READ_ACTIVE_APPLICATIONS); // "sRN SetActiveApplications"
+      }
       int numberOfLayers = parser_->getCurrentParamPtr()->getNumberOfLayers();
 
       switch (numberOfLayers)
@@ -2160,13 +2180,32 @@ namespace sick_scan_xd
         if (useBinaryCmdNow)
         {
           this->convertAscii2BinaryCmd(sopasCmd.c_str(), &reqBinary);
-          result = sendSopasAndCheckAnswer(reqBinary, &replyDummy);
+          if (reqBinary.size() > 0)
+          {
+            result = sendSopasAndCheckAnswer(reqBinary, &replyDummy);
+          }
+          else
+          {
+            result = 0;
+          }
           sopasReplyBinVec[cmdId] = replyDummy;
         }
         else
         {
           result = sendSopasAndCheckAnswer(sopasCmd.c_str(), &replyDummy);
         }
+
+        if (parser_->getCurrentParamPtr()->getScannerName().compare(SICK_SCANNER_MRS_1XXX_NAME) == 0 && sopasCmd == sopasCmdVec[CMD_READ_ACTIVE_APPLICATIONS]) // "sRN SetActiveApplications"
+        {
+          std::string sopas_reply = DataDumper::binDataToAsciiString(replyDummy.data(), replyDummy.size());
+          ROS_INFO_STREAM("response to \"sRN SetActiveApplications\": " << sopas_reply);
+          if (sopas_reply.find("FEVL\\x01") != std::string::npos)
+            isFieldEvaluationActive() = true;
+          if (sopas_reply.find("FEVL\\x00") != std::string::npos)
+            isFieldEvaluationActive() = false;
+          ROS_INFO_STREAM("FieldEvaluationActive = " << (isFieldEvaluationActive() ? "true": "false"));
+        }
+
         if (result == 0) // command sent successfully
         {
           // useBinaryCmd holds information about last successful command mode
@@ -5326,7 +5365,7 @@ namespace sick_scan_xd
     std::string keyWord1 = "sWN FREchoFilter";
     std::string keyWord2 = "sEN LMDscandata";
     std::string keyWord3 = "sWN LMDscandatacfg";
-    std::string keyWord4 = "sWN SetActiveApplications";
+    std::string keyWord4 = "sWN SetActiveApplications"; // "sWN SetActiveApplications 2 FEVL <0|1> RANG 1" for MRS-1xxx with firmware >= 2.x
     std::string keyWord5 = "sEN IMUData";
     std::string keyWord6 = "sWN EIIpAddr";
     std::string keyWord7 = "sMN mLMPsetscancfg";
@@ -5443,7 +5482,7 @@ namespace sick_scan_xd
 
     }
 
-    if (cmdAscii.find(keyWord4) != std::string::npos)
+    if (cmdAscii.find(keyWord4) != std::string::npos) // "sWN SetActiveApplications 1 FEVL 1" or "sWN SetActiveApplications 1 RANG 1"
     {
       char tmpStr[1024] = {0};
       char szApplStr[255] = {0};
@@ -5460,18 +5499,24 @@ namespace sick_scan_xd
         buffer[2 + ii] = szApplStr[ii]; // idx: 1,2,3,4
       }
       buffer[6] = dummy1 ? 0x01 : 0x00;
-      if (buffer[6] == 0x00 && parser_->getCurrentParamPtr()->getScannerName().compare(SICK_SCANNER_MRS_1XXX_NAME) == 0) // activate FEVL in case of MRS1xxx with firmware version > 1
+      bufferLen = 7;
+      if (parser_->getCurrentParamPtr()->getScannerName().compare(SICK_SCANNER_MRS_1XXX_NAME) == 0) // activate FEVL and RANG in case of MRS1xxx with firmware version > 1
       {
-        size_t device_idx = deviceIdentStr.find("MRS1xxx"); // Get MRS1xxx version from device ident string
-        size_t version_idx = ((device_idx != std::string::npos) ? deviceIdentStr.find("V", device_idx) : std::string::npos);
-        char version_id = ((version_idx != std::string::npos) ? deviceIdentStr[version_idx + 1] : '0');
+        char version_id = getFirmwareVersionIdMRS1xxx(deviceIdentStr); // Get MRS1xxx version from device ident string
         if (version_id > '1')
         {
-          buffer[6] = 0x01; // MRS1xxx with firmware version > 1 supports RANG+FEVL -> overwrite with "<STX>sWN{SPC}SetActiveApplications{SPC}1{SPC}FEVL{SPC}1<ETX>"
+          // buffer[6] = 0x01; // MRS1xxx with firmware version > 1 supports RANG+FEVL -> overwrite with "<STX>sWN{SPC}SetActiveApplications{SPC}1{SPC}FEVL{SPC}1<ETX>"
+          // MRS1xxx with firmware version > 1 supports RANG+FEVL -> overwrite with "<STX>sWN{SPC}SetActiveApplications{SPC}2{SPC}FEVL{SPC}1{SPC}RANG{SPC}1<ETX>"
+          // resp. binary "sWN SetActiveApplications \00\02\46\45\56\4C\01\52\41\4e\47\01"
+          uint8_t field_evaluation_status = isFieldEvaluationActive() ? 0x01: 0x00;
+          std::vector<uint8_t> binary_parameter = {0x00, 0x02, 0x46, 0x45, 0x56, 0x4C, field_evaluation_status, 0x52, 0x41, 0x4e, 0x47, 0x01};
+          for (int ii = 0; ii < binary_parameter.size(); ii++)
+            buffer[ii] = binary_parameter[ii];
+          bufferLen = binary_parameter.size();
         }
       }
-      bufferLen = 7;
     }
+
 
     if (cmdAscii.find(keyWord5) != std::string::npos)
     {
