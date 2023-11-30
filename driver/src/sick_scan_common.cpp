@@ -4044,6 +4044,8 @@ namespace sick_scan_xd
           std::vector<uint8_t> addLandmarkRequest = { 0x02, 0x02, 0x02, 0x02, 0, 0, 0, 0 };
           addLandmarkRequest.insert(addLandmarkRequest.end(), addLandmarkRequestPayload.begin(), addLandmarkRequestPayload.end());
           setLengthAndCRCinBinarySopasRequest(&addLandmarkRequest);
+          ROS_DEBUG_STREAM("Sending landmarks, " << addLandmarkRequest.size() << " byte sopas request (" << addLandmarkRequestPayload.size()
+            << " byte payload): \"" << DataDumper::binDataToAsciiString(addLandmarkRequest.data(), addLandmarkRequest.size()) << "\"");
           if (sendSopasAndCheckAnswer(addLandmarkRequest, &sopas_response) != 0)
             return ExitError;
           // Store mapping layout: "sMN mNLAYStoreLayout"
@@ -5909,12 +5911,16 @@ namespace sick_scan_xd
   void SickScanCommon::setLengthAndCRCinBinarySopasRequest(std::vector<uint8_t>* requestBinary)
   {
 
-  int msgLen = (int)requestBinary->size();
+  int msgLen = (int)requestBinary->size(); // requestBinary = 4 byte 0x02020202 + 4 byte payload length + payload
   msgLen -= 8;
+  // for (int i = 0; i < 4; i++)
+  // {
+  //   unsigned char bigEndianLen = msgLen & (0xFF << (3 - i) * 8);
+  //   (*requestBinary)[i + 4] = ((unsigned char) (bigEndianLen)); // HIER WEITERMACHEN!!!!
+  // }
   for (int i = 0; i < 4; i++)
   {
-    unsigned char bigEndianLen = msgLen & (0xFF << (3 - i) * 8);
-    (*requestBinary)[i + 4] = ((unsigned char) (bigEndianLen)); // HIER WEITERMACHEN!!!!
+    (*requestBinary)[4 + i] = (uint8_t)((msgLen >> (3 - i) * 8) & 0xFF); // payload length is always 4 byte big endian encoded
   }
   unsigned char xorVal = 0x00;
   xorVal = sick_crc8((unsigned char *) (&((*requestBinary)[8])), requestBinary->size() - 8);
