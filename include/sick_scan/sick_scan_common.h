@@ -432,6 +432,8 @@ namespace sick_scan_xd
     */
     bool isCompatibleDevice(const std::string identStr) const;
 
+    bool switchColaProtocol(bool useBinaryCmd);
+
 #ifdef USE_DIAGNOSTIC_UPDATER
     std::shared_ptr<diagnostic_updater::Updater> diagnostics_;
 #endif

@@ -1198,6 +1198,22 @@ namespace sick_scan_xd
     return ExitSuccess;
   }
 
+  bool SickScanCommon::switchColaProtocol(bool useBinaryCmd)
+  {
+    std::vector<unsigned char> sopas_response;
+    std::vector<std::string> sopas_change_cola_commands = { cmdSetAccessMode3(), sopasCmdVec[(useBinaryCmd ? CMD_SET_TO_COLA_B_PROTOCOL : CMD_SET_TO_COLA_A_PROTOCOL)] };
+    for(int n = 0; n < sopas_change_cola_commands.size(); n++)
+    {
+      if (sendSopasAorBgetAnswer(sopas_change_cola_commands[n], &sopas_response, !useBinaryCmd) != 0) // no answer
+      {
+        ROS_WARN_STREAM("checkColaDialect: no lidar response to sopas requests \"" << sopas_change_cola_commands[n] << "\", aborting");
+        return false;
+      }
+    }
+    ROS_INFO_STREAM("checkColaDialect: switched to Cola-" << (useBinaryCmd ? "B" : "A"));
+    return true;
+  }
+
   // Check Cola-Configuration of the scanner:
   // * Send "sRN DeviceState" with configured cola-dialect (Cola-B = useBinaryCmd)
   // * If lidar does not answer:
@@ -1206,6 +1222,13 @@ namespace sick_scan_xd
   //     * Switch to configured cola-dialect (Cola-B = useBinaryCmd) using "sWN EIHstCola" and restart
   ExitCode SickScanCommon::checkColaTypeAndSwitchToConfigured(bool useBinaryCmd)
   {
+    static bool tim240_binary_mode = useBinaryCmd;
+    bool useBinaryCmdCfg = useBinaryCmd;
+    if (this->parser_->getCurrentParamPtr()->getScannerName().compare(SICK_SCANNER_TIM_240_NAME) == 0)
+    {
+      useBinaryCmd = tim240_binary_mode; // TiM240 does not respond to any request if once sent a sopas command in wrong cola dialect. Toggle Cola dialect directly after restart required for TiM240.
+      ROS_INFO_STREAM("checkColaDialect using Cola-" << (useBinaryCmd ? "B" : "A") << " (TiM-240)");
+    }
     if (sendSopasAorBgetAnswer(sopasCmdVec[CMD_DEVICE_STATE], 0, useBinaryCmd) != 0) // no answer
     {
       ROS_WARN_STREAM("checkColaDialect: lidar response not in configured Cola-dialect Cola-" << (useBinaryCmd ? "B" : "A") << ", trying different Cola configuration");
@@ -1214,30 +1237,33 @@ namespace sick_scan_xd
       {
         ROS_WARN_STREAM("checkColaDialect: no lidar response in any cola configuration, check lidar and network!");
         ROS_WARN_STREAM("SickScanCommon::init_scanner() failed, aborting.");
-        return ExitError;
       }
       else
       {
         ROS_WARN_STREAM("checkColaDialect: lidar response in configured Cola-dialect Cola-" << (!useBinaryCmd ? "B" : "A") << ", changing Cola configuration and restart!");
-        std::vector<std::string> sopas_change_cola_commands = {
-          cmdSetAccessMode3(), // sopasCmdVec[CMD_SET_ACCESS_MODE_3],
-          sopasCmdVec[(useBinaryCmd ? CMD_SET_TO_COLA_B_PROTOCOL : CMD_SET_TO_COLA_A_PROTOCOL)]
-        };
-        for(int n = 0; n < sopas_change_cola_commands.size(); n++)
-        {
-          if (sendSopasAorBgetAnswer(sopas_change_cola_commands[n], &sopas_response, !useBinaryCmd) != 0) // no answer
-          {
-            ROS_WARN_STREAM("checkColaDialect: no lidar response to sopas requests \"" << sopas_change_cola_commands[n] << "\", aborting");
-            return ExitError;
-          }
-        }
+        switchColaProtocol(useBinaryCmd);
         ROS_INFO_STREAM("checkColaDialect: restarting after Cola configuration change.");
-        return ExitError;
       }
+      if (this->parser_->getCurrentParamPtr()->getScannerName().compare(SICK_SCANNER_TIM_240_NAME) == 0)
+      {
+        tim240_binary_mode = !tim240_binary_mode; // TiM240 does not respond to any request if once sent a sopas command in wrong cola dialect. Toggle Cola dialect directly after restart required for TiM240.
+        ROS_INFO_STREAM("checkColaDialect: switching to Cola-" << (useBinaryCmd ? "B" : "A") << " after restart (TiM-240)");
+      }
+      return ExitError;
     }
     else
     {
       ROS_INFO_STREAM("checkColaDialect: lidar response in configured Cola-dialect Cola-" << (useBinaryCmd ? "B" : "A"));
+      if (this->parser_->getCurrentParamPtr()->getScannerName().compare(SICK_SCANNER_TIM_240_NAME) == 0)
+      {
+        if (useBinaryCmd != useBinaryCmdCfg)
+        {
+          ROS_INFO_STREAM("checkColaDialect sucessful using Cola-" << (useBinaryCmd ? "B" : "A") << ", switch to Cola-" << (useBinaryCmdCfg ? "B" : "A") << " (TiM-240)");
+          switchColaProtocol(useBinaryCmdCfg);
+          tim240_binary_mode = useBinaryCmdCfg;
+          return ExitError; // Restart after protocol switch required for TiM240
+        }
+      }
     }
     return ExitSuccess;
   }
