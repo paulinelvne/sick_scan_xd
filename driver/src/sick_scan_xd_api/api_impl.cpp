@@ -813,7 +813,8 @@ int32_t SickScanApiClose(SickScanApiHandle apiHandle)
             ROS_ERROR_STREAM("## ERROR SickScanApiClose(): invalid apiHandle");
             return SICK_SCAN_API_NOT_INITIALIZED;
         }
-        stopScannerAndExit(true);
+        // stopScannerAndExit(true);
+        rosSignalHandler(SIGINT); // Send Ctrl-C for gentle shutdown
         return SICK_SCAN_API_SUCCESS;
     }
     catch(const std::exception& e)
