@@ -93,7 +93,7 @@
 
 #define SICK_GENERIC_MAJOR_VER "3"
 #define SICK_GENERIC_MINOR_VER "1"
-#define SICK_GENERIC_PATCH_LEVEL "0"
+#define SICK_GENERIC_PATCH_LEVEL "5"
 
 #define DELETE_PTR(p) if(p){delete(p);p=0;}
 
@@ -201,11 +201,14 @@ void rosSignalHandler(int signalRecv)
   ROS_INFO_STREAM("You are leaving the following version of this node:\n");
   ROS_INFO_STREAM(getVersionInfo() << "\n");
   s_shutdownSignalReceived = true;
+  ROS_INFO_STREAM("sick_generic_laser: stop and exit (line " << __LINE__ << ")");
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   stopScannerAndExit(true);
+  ROS_INFO_STREAM("sick_generic_laser: exit (line " << __LINE__ << ")");
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
-  std::cout << "rosSignalHandler exit." << std::endl;
+  std::cout << "sick_generic_laser: exit (line " << __LINE__ << ")" << std::endl;
   rosShutdown();
+  std::cout << "sick_generic_laser: exit (line " << __LINE__ << ")" << std::endl;
 }
 
 
@@ -692,6 +695,7 @@ void joinGenericLaser(void)
 {
   if (s_generic_laser_thread != 0)
   {
+
     s_generic_laser_thread->join();
     delete s_generic_laser_thread;
     s_generic_laser_thread = 0;
