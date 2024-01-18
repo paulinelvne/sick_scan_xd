@@ -364,7 +364,15 @@ bool sick_scansegment_xd::MsgPackThreads::runThreadCb(void)
         }
 
         // Close msgpack receiver, converter and exporter
+        ROS_INFO_STREAM("sick_scansegment_xd finishing.");
         msgpack_exporter.RemoveExportListener(ros_msgpack_publisher->ExportListener());
+        if (udp_receiver_imu)
+        {
+            udp_receiver_imu->Close();
+            DELETE_PTR(udp_receiver_imu);
+        }
+        udp_receiver->Stop();
+        udp_receiver->Fifo()->Shutdown();
         ROS_INFO_STREAM("sick_scansegment_xd finishing.");
 
         // Send stop command (sopas and/or rest-api)
@@ -379,21 +387,14 @@ bool sick_scansegment_xd::MsgPackThreads::runThreadCb(void)
         std::cout << "sick_scansegment_xd exit: stopping services and communication..." << std::endl;
         try
         {
+            // Shutdown, cleanup and exit
             DELETE_PTR(sopas_service);
             DELETE_PTR(sopas_tcp);
-
-            // Shutdown, cleanup and exit
-            if (udp_receiver_imu)
-            {
-                udp_receiver_imu->Close();
-                delete(udp_receiver_imu);
-            }
             msgpack_converter.Fifo()->Shutdown();
-            udp_receiver->Fifo()->Shutdown();
             msgpack_exporter.Close();
             msgpack_converter.Close();
             udp_receiver->Close();
-            delete(udp_receiver);
+            DELETE_PTR(udp_receiver);
             std::cout << "sick_scansegment_xd exit: services and communication stopped." << std::endl;
         }
         catch(const std::exception& e)

@@ -162,7 +162,7 @@ sick_scansegment_xd::Config::Config()
     // send_udp_start_string = "magicalActivate"; // udp string to start multiScan136, default: "magicalActivate"
     udp_timeout_ms = 60000;                  // Timeout for udp messages in milliseconds, default: 60*1000
     scandataformat = 2;                      // ScanDataFormat: 1 for msgpack or 2 for compact scandata, default: 2
-    imu_enable = false;                      // IMU enabled or disabled
+    imu_enable = true;                       // IMU enabled or disabled
     imu_udp_port = 7503;                     // default udp port for multiScan imu data is 7503
     imu_latency_microsec = 0;                // imu latency in microseconds
 
