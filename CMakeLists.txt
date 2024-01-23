@@ -832,6 +832,7 @@ if((${ENABLE_EMULATOR} OR ENABLE_EMULATOR EQUAL ON) AND (NOT WIN32 OR ROS_VERSIO
         ${catkin_LIBRARIES}
         ${roslib_LIBRARIES}
         ${PROJECT_NAME}_lib 
+        ${SICK_LDMRS_LIBRARIES}
         ${LIB_JSONCPP})
     target_include_directories(sick_scan_emulator PUBLIC test test/emulator/include)
     if(NOT WIN32 AND NOT ROS_VERSION EQUAL 1)
